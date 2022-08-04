@@ -1,0 +1,80 @@
+run_name: behrad-r56-bench-r1z1-sampled
+gpu_type: a100_80gb
+gpu_num: 2
+platform: r1z1
+image: mosaicml/pytorch_vision:1.11.0_cu113-python3.9-ubuntu20.04
+integrations:
+  - integration_type: "wandb"
+    project: behrad_benchmarker
+    entity: mosaic-ml
+  - integration_type: "git_repo"
+    git_repo: mosaicml/composer
+    git_branch: behrad_benchmarker
+    pip_install: .[all]
+      #- integration_type: "apt_packages"
+      #packages:
+      #- git
+
+command: |
+    pip3 install awscli
+    set -e -x
+    #git clone https://github.com/mosaicml/composer $HOME/composer
+    #cd $HOME/composer
+    export SEED=71
+    export DURATION=120
+    cd composer
+    echo 'Checking out composer branch'
+    git checkout behrad_benchmarker
+    #pip install --user -e .[all]
+    composer examples/run_composer_trainer.py -f /mnt/config/parameters.yaml \
+    --seed=${SEED} \
+    --max_duration=${DURATION}ep
+
+
+parameters: 
+  callbacks:
+    benchmarker:
+      window_length: 10
+      epoch_list: [0, 20, 40, 60, 80, 100]
+      step_list: [0, 20]
+  train_dataset:
+    cifar10:
+      datadir: /datasets/CIFAR10
+      is_train: true
+      download: true
+      shuffle: true
+      drop_last: true
+  val_dataset:
+  optimizer:
+    decoupled_sgdw:
+      lr: 1.2
+      momentum: 0.9
+      weight_decay: 2.0e-3
+  schedulers:
+    - multistep_with_warmup:
+        t_warmup: "5ep"
+        milestones:
+          - "80ep"
+          - "120ep"
+        gamma: 0.1
+  model:
+    resnet_cifar:
+      model_name: resnet_56
+      initializers:
+        - kaiming_normal
+        - bn_uniform
+  max_duration: 160ep
+  train_batch_size: 1024
+  eval_batch_size: 1000
+  seed: 17
+  grad_accum: 1
+  device:
+    gpu: {}
+  dataloader:
+    pin_memory: true
+    timeout: 0
+    prefetch_factor: 2
+    persistent_workers: true
+    num_workers: 8
+  precision: amp
+  progress_bar: false
